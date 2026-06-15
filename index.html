@@ -99,7 +99,14 @@
         <button class="btn icon" id="menuBtn" title="Menü" aria-haspopup="true" aria-expanded="false">☰</button>
         <div class="menu" id="menu" hidden>
           <label class="menu-row"><span>Blockgröße</span>
-            <select class="hsel" id="intervalSel" title="Blockgröße / Ping-Intervall"></select>
+            <select class="hsel" id="intervalSel" title="Blockgröße = dein Abrechnungstakt"></select>
+          </label>
+          <div class="menu-hint">↳ dein Abrechnungstakt</div>
+          <label class="menu-row"><span>Erinnerung</span>
+            <label class="menu-couple"><input type="checkbox" id="reminderCoupleChk"> An Blockgröße koppeln</label>
+          </label>
+          <label class="menu-row"><span></span>
+            <select class="hsel" id="reminderSel" title="Erinnerungs-Intervall"></select>
           </label>
           <div class="menu-sep"></div>
           <button class="menu-item" id="themeBtn">🌙 Theme</button>
