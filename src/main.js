@@ -16,6 +16,7 @@ import {
   state, save, onSaveError, initCrossTabSync,
   INTERVALS, PX_PER_MIN, DOW,
   getSlotMin, setSlotMin, getAnchor, setAnchor,
+  getReminderMin, setReminderMin, getReminderCoupled, setReminderCoupled,
   colsForViewport, getDayCols, setDayCols,
 } from './state.js';
 import {
@@ -39,7 +40,10 @@ import { rowsToBlocks } from './importRows.js';
 // nextBoundary(d) unchanged; they supply the active block size to the pure,
 // parameterised implementations in time.js.
 const floorSlot = (d) => floorSlotMin(d, getSlotMin());
-const nextBoundary = (d) => nextBoundaryMin(d, getSlotMin());
+// Cadence (WHEN to ping) follows the reminder interval, which is decoupled from
+// the block size (getReminderMin() returns the block size while coupled). The
+// gap computation in blocks.js stays on the block size (getSlotMin()).
+const nextReminder = (d) => nextBoundaryMin(d, getReminderMin());
 
 /* ============================================================
    KIDEON time — passive time tracker.  MIT License.
@@ -207,9 +211,14 @@ function applyImport(rows){
 // out from under the pointer, dropping the captured block and silently aborting
 // the drag — so any timer-driven render/ping must wait for the pointer to lift.
 function gestureInFlight(){ return document.body.classList.contains("dragging"); }
+// Single self-perpetuating timer aimed at the next reminder boundary. Tracked
+// in _tickT so a cadence change (block/reminder setting, or a cross-tab sync)
+// can re-arm it to the new boundary without leaking a parallel timer chain.
+let _tickT=null;
 function scheduleTick(){
-  const ms=nextBoundary(new Date()).getTime()-Date.now()+200;
-  setTimeout(()=>{ onBoundary(); scheduleTick(); }, Math.max(ms,500));
+  if(_tickT) clearTimeout(_tickT);
+  const ms=nextReminder(new Date()).getTime()-Date.now()+200;
+  _tickT=setTimeout(()=>{ _tickT=null; onBoundary(); scheduleTick(); }, Math.max(ms,500));
 }
 /* Single entry point for all three ping triggers (boundary tick, tab return,
    initial load). Morgen-Modus (see morningMode in blocks.js): after a night
@@ -523,16 +532,60 @@ function applyTheme(){
 }
 $("themeBtn").onclick=()=>{ state.settings.theme=(state.settings.theme==="light")?"dark":"light"; save(); applyTheme(); };
 
+// "Blockgröße = dein Abrechnungstakt" education: a transient toast shown ONCE
+// per settings change (i.e. the first time the user changes the block size in
+// this session), not a blocking modal and not persisted across sessions.
+let _blockEduShown=false;
 function initInterval(){
   const sel=$("intervalSel");
   sel.innerHTML=INTERVALS.map(m=>`<option value="${m}">${m} min</option>`).join("");
   sel.value=String(getSlotMin());
   sel.onchange=()=>{
     setSlotMin(parseInt(sel.value,10));
-    state.settings.intervalMin=getSlotMin(); save();
+    state.settings.intervalMin=getSlotMin();
+    // While coupled, the reminder cadence follows the block size — drag it
+    // along and reflect the inherited value in the (disabled) reminder select.
+    if(getReminderCoupled()){ setReminderMin(getSlotMin()); $("reminderSel").value=String(getSlotMin()); }
+    save();
     render(); updateCountdown();
-    toast("Blockgröße: "+getSlotMin()+" min");
+    scheduleTick();   // cadence may have changed (coupled) → re-arm the timer
+    if(!_blockEduShown){
+      _blockEduShown=true;
+      toast("Blockgröße = dein Abrechnungstakt. Erinnerungen stellst du separat ein.");
+    } else {
+      toast("Blockgröße: "+getSlotMin()+" min");
+    }
   };
+}
+
+// Reminder (Erinnerung) controls: a "An Blockgröße koppeln" checkbox and an
+// interval select that is disabled (and shows the inherited block size) while
+// coupled. Mirrors initInterval(): init from state, wire handlers, persist.
+function initReminder(){
+  const chk=$("reminderCoupleChk"), sel=$("reminderSel");
+  sel.innerHTML=INTERVALS.map(m=>`<option value="${m}">${m} min</option>`).join("");
+  syncReminderControls();
+  chk.onchange=()=>{
+    setReminderCoupled(chk.checked);
+    if(chk.checked) setReminderMin(getSlotMin());   // re-couple → snap to block size
+    save();
+    syncReminderControls();
+    scheduleTick();   // cadence changed → re-arm the timer
+  };
+  sel.onchange=()=>{
+    setReminderMin(parseInt(sel.value,10));
+    save();
+    scheduleTick();
+    toast("Erinnerung: "+getReminderMin()+" min");
+  };
+}
+// Reflect coupled/decoupled state into the two controls (disabled + shown value).
+function syncReminderControls(){
+  const chk=$("reminderCoupleChk"), sel=$("reminderSel");
+  const coupled=getReminderCoupled();
+  chk.checked=coupled;
+  sel.disabled=coupled;
+  sel.value=String(getReminderMin());   // shows inherited block size while coupled
 }
 
 function refreshSoundBtn(){
@@ -627,6 +680,9 @@ function onExternalState(){
   if(INTERVALS.includes(state.settings.intervalMin) && state.settings.intervalMin!==getSlotMin()){
     setSlotMin(state.settings.intervalMin); $("intervalSel").value=String(getSlotMin());
   }
+  // Another tab may have (de)coupled the reminder or picked a new cadence —
+  // reflect it in the controls and re-arm the ping timer to the new cadence.
+  syncReminderControls(); scheduleTick();
   applyTheme(); refreshSoundBtn(); refreshNotifyBtn(); render();
 }
 initCrossTabSync(onExternalState);
@@ -648,6 +704,7 @@ function boot(){
   applyTheme();
   if(!state.settings.introSeen) showIntro();
   initInterval();
+  initReminder();
   refreshSoundBtn();
   refreshNotifyBtn();
   refreshExportReminder();            // remind to export if overdue (once/day)

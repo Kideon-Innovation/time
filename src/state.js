@@ -55,7 +55,11 @@ function defaultTheme() {
 
 function defaultSettings(slotMin) {
   return {
-    intervalMin: slotMin, soundOn: true, notifyOn: false, introSeen: false,
+    // reminderMin defaults to the block size and reminderCoupled to true, so a
+    // fresh (and, via the default-fill in parseRaw, an existing) user gets
+    // EXACTLY today's behaviour: the reminder cadence equals the block size.
+    intervalMin: slotMin, reminderMin: slotMin, reminderCoupled: true,
+    soundOn: true, notifyOn: false, introSeen: false,
     notifyNudgeDismissed: false, exportReminderDay: '', exportNotifyDay: '', theme: defaultTheme(),
   };
 }
@@ -67,10 +71,16 @@ function parseRaw(raw, slotMin) {
   try {
     const s = JSON.parse(raw);
     if (s && s.blocks) {
+      // Default-fill reminderMin from the payload's OWN intervalMin (not the
+      // caller's slotMin) so an existing user with intervalMin=20 and no
+      // reminder fields inherits reminder cadence = 20 — i.e. exactly today's
+      // behaviour. defaultSettings also seeds reminderCoupled ← true.
+      const stored = s.settings || {};
+      const base = defaultSettings(INTERVALS.includes(stored.intervalMin) ? stored.intervalMin : slotMin);
       return {
         blocks: s.blocks,
         recentLabels: s.recentLabels || [],
-        settings: Object.assign(defaultSettings(slotMin), s.settings || {}),
+        settings: Object.assign(base, stored),
         savedAt: Number.isFinite(s.savedAt) ? s.savedAt : undefined,
       };
     }
@@ -216,6 +226,20 @@ export function initCrossTabSync(onExternalChange) {
 let _slotMin = INTERVALS.includes(state.settings.intervalMin) ? state.settings.intervalMin : 15;
 export function getSlotMin() { return _slotMin; }
 export function setSlotMin(v) { _slotMin = v; }
+
+// Reminder (ping) cadence — decoupled from the block size. While coupled the
+// reminder simply follows the block size, so getReminderMin() returns the
+// active slotMin and the stored reminderMin is irrelevant; once decoupled the
+// stored value is used as-is. setReminderMin/setReminderCoupled persist into
+// state.settings (the multi-tab merge picks them up like any other setting).
+export function getReminderCoupled() { return state.settings.reminderCoupled !== false; }
+export function setReminderCoupled(b) { state.settings.reminderCoupled = !!b; }
+export function getReminderMin() {
+  if (getReminderCoupled()) return getSlotMin();
+  const r = state.settings.reminderMin;
+  return INTERVALS.includes(r) ? r : getSlotMin();
+}
+export function setReminderMin(v) { state.settings.reminderMin = v; }
 
 // Left-most visible day in the calendar.
 let _anchor = startOfDay(new Date());
