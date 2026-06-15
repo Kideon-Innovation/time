@@ -174,7 +174,7 @@
   .menu-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
     padding:6px 8px 8px;font-size:12.5px;color:var(--text-dim)}
   .menu-row .hsel{height:30px}
-  /* Permanent education line under Blockgröße: "Blockgröße = Geld". */
+  /* Permanent education line under Blockgröße: "↳ dein Abrechnungstakt". */
   .menu-hint{padding:0 10px 6px;margin-top:-4px;font-size:11px;color:var(--text-dim);opacity:.85}
   /* Couple checkbox label sits in the value slot of its menu-row. */
   .menu-couple{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-dim);cursor:pointer;white-space:nowrap}
