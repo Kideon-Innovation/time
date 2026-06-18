@@ -28,7 +28,24 @@ export default defineConfig({
     timeout: 120000,
   },
   projects: [
+    // Desktop runs the FULL suite — it is the source of truth for behaviour.
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } } },
-    { name: 'mobile', use: { ...devices['Pixel 5'] } },
+    // Mobile only re-runs the specs that assert something genuinely different
+    // on a touch/narrow device. Every other spec is viewport-neutral — its
+    // mobile run was a pure duplicate (the only per-project branches elsewhere
+    // are screenshot side-effects, not extra assertions), so running them twice
+    // doubled CI time for zero coverage. The three below earn their mobile run:
+    //   • core-flow         — tap-to-log is a touch-only gesture
+    //   • drag-resize-move  — touch long-press move + edge resize
+    //   • ui                — responsive DAY_COLS + mobile-only menu clipping
+    {
+      name: 'mobile',
+      use: { ...devices['Pixel 5'] },
+      testMatch: [
+        '**/core-flow.spec.js',
+        '**/drag-resize-move.spec.js',
+        '**/ui.spec.js',
+      ],
+    },
   ],
 });
