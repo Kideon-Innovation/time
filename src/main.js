@@ -24,7 +24,7 @@ import {
   beat, gapSlots, morningMode,
 } from './blocks.js';
 import { $ } from './ui/dom.js';
-import { toast, notify, beep } from './ui/notify.js';
+import { toast, notify, beep, showNotification } from './ui/notify.js';
 import {
   initCalendar, render, renderHeaderClock,
   updateNowLine, updateCountdown, scrollToNow,
@@ -341,12 +341,10 @@ function notifyExportOverdue(days){
   // gate to once per day via the same dismiss-day mechanism is too aggressive
   // (dismiss would also kill the banner); use a dedicated per-day notify flag.
   if(state.settings.exportNotifyDay===todayKey()) return;
-  try{
-    new Notification("KIDEON time — Daten sichern",{
-      body:"Seit "+days+" Tagen kein Excel-Export. Lad deine Daten runter, damit nichts verloren geht.",
-      tag:"timelog-export", renotify:false });
-    state.settings.exportNotifyDay=todayKey(); save();
-  }catch(e){}
+  showNotification("KIDEON time — Daten sichern",{
+    body:"Seit "+days+" Tagen kein Excel-Export. Lad deine Daten runter, damit nichts verloren geht.",
+    tag:"timelog-export", renotify:false });
+  state.settings.exportNotifyDay=todayKey(); save();
 }
 $("exportNudgeDismiss").onclick=()=>{ state.settings.exportReminderDay=todayKey(); save(); refreshExportReminder(); };
 $("exportNudgeGo").onclick=()=>{ updateExpCount(); openScrim("exportScrim"); };

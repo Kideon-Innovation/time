@@ -45,15 +45,30 @@ export function toast(m, opts) {
   toastT = setTimeout(() => t.classList.remove('show'), actionable ? 6000 : 2400);
 }
 
-/* ---------- notification ---------- */
+/* ---------- notification ----------
+   Once a service worker controls the page (PWA install / standalone window),
+   Chrome blocks the page-context `new Notification()` constructor — the throw
+   lands in the catch and the banner silently never shows (sound still plays via
+   WebAudio). Route through registration.showNotification() when a SW is present,
+   falling back to the constructor for plain non-SW contexts. */
+export function showNotification(title, opts) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const fallback = () => { try { new Notification(title, opts); } catch (e) { /* best-effort */ } };
+  if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+    navigator.serviceWorker.getRegistration()
+      .then((reg) => { if (reg && reg.showNotification) reg.showNotification(title, opts); else fallback(); })
+      .catch(fallback);
+  } else {
+    fallback();
+  }
+}
+
 export function notify(n) {
-  if (!state.settings.notifyOn || !('Notification' in window) || Notification.permission !== 'granted') return;
-  try {
-    new Notification('KIDEON time — Ping', {
-      body: n > 1 ? (n + ' Einträge nachzutragen') : 'Woran arbeitest du gerade?',
-      tag: 'timelog-ping', renotify: true,
-    });
-  } catch (e) { /* notifications are best-effort */ }
+  if (!state.settings.notifyOn) return;
+  showNotification('KIDEON time — Ping', {
+    body: n > 1 ? (n + ' Einträge nachzutragen') : 'Woran arbeitest du gerade?',
+    tag: 'timelog-ping', renotify: true,
+  });
 }
 
 /* ---------- sound ---------- */
